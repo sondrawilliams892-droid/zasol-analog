@@ -13,6 +13,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def main():
+    if not BOT_TOKEN:
+        logger.error("BOT_TOKEN is empty! Bot cannot start.")
+        logger.error("Please set BOT_TOKEN in Railway Variables.")
+        return
+    
+    logger.info(f"BOT_TOKEN loaded: ...{BOT_TOKEN[-10:] if len(BOT_TOKEN) > 10 else 'EMPTY'}")
+    logger.info(f"Using DATABASE_URL: {os.environ.get('DATABASE_URL', 'NOT SET')[:50]}")
+    
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
 
@@ -28,4 +36,5 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
+    import os
     asyncio.run(main())
