@@ -1,1 +1,1 @@
-{"action":"navigate","args":{"url":"https://github.com/new","newTab":true},"session":"railway-deploy"}
+{"action":"navigate","args":{"url":"https://github.com/settings/installations","newTab":false},"session":"railway-deploy"}

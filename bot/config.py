@@ -1,10 +1,20 @@
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(","))) if os.getenv("ADMIN_IDS") else []
+if not BOT_TOKEN:
+    logger.warning("BOT_TOKEN not set! Bot will not start.")
+
+ADMIN_IDS = []
+_admin_ids_str = os.getenv("ADMIN_IDS", "")
+if _admin_ids_str:
+    ADMIN_IDS = [int(x.strip()) for x in _admin_ids_str.split(",") if x.strip().isdigit()]
+
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///zasol.db")
 
 WHITEPAGES_API_KEY = os.getenv("WHITEPAGES_API_KEY", "")
