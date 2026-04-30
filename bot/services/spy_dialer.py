@@ -14,6 +14,15 @@ logger = logging.getLogger(__name__)
 class SpyDialerService:
     BASE_URL = "https://spydialer.com/search"
     
+    # Free proxy rotation (GeoNode API)
+    PROXY_LIST = [
+        "http://38.183.146.83:80",   # elite, Indonesia
+        "http://54.39.154.107:8082", # anonymous, Canada  
+        "http://188.132.150.253:8080", # transparent, Turkey
+        "http://31.145.149.75:9090", # transparent, Turkey
+        "http://103.48.68.29:83",    # transparent, India
+    ]
+    
     # Rotate user agents to avoid blocking
     USER_AGENTS = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -45,31 +54,43 @@ class SpyDialerService:
                 'Cache-Control': 'max-age=0',
             }
             
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.BASE_URL}?number={clean_phone}"
-                logger.info(f"SpyDialer: Requesting {url}")
-                
-                async with session.get(url, headers=headers, timeout=30, allow_redirects=True) as response:
-                    logger.info(f"SpyDialer: Response status {response.status}")
-                    logger.info(f"SpyDialer: Content-Type: {response.headers.get('Content-Type', 'unknown')}")
-                    
-                    if response.status != 200:
-                        logger.warning(f"SpyDialer: Non-200 status: {response.status}")
-                        return None
-                    
-                    html = await response.text()
-                    logger.info(f"SpyDialer: Got HTML length {len(html)}")
-                    
-                    # Check for cloudflare/blocking
-                    if 'cloudflare' in html.lower() or 'cf-browser-verification' in html.lower():
-                        logger.warning("SpyDialer: Cloudflare detected")
-                        return None
-                    
-                    if 'blocked' in html.lower() or 'captcha' in html.lower():
-                        logger.warning("SpyDialer: Blocking detected")
-                        return None
-                    
-                    return self._parse_result(html, phone)
+            # Try with proxy first, then without
+            proxies_to_try = self.PROXY_LIST + [None]  # None = direct connection
+            
+            for proxy_url in proxies_to_try:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        url = f"{self.BASE_URL}?number={clean_phone}"
+                        logger.info(f"SpyDialer: Requesting {url} via {'proxy' if proxy_url else 'direct'}")
+                        
+                        proxy = proxy_url if proxy_url else None
+                        async with session.get(url, headers=headers, timeout=30, allow_redirects=True, proxy=proxy) as response:
+                            logger.info(f"SpyDialer: Response status {response.status} via {'proxy' if proxy_url else 'direct'}")
+                            
+                            if response.status != 200:
+                                logger.warning(f"SpyDialer: Non-200 status: {response.status}")
+                                continue  # Try next proxy
+                            
+                            html = await response.text()
+                            logger.info(f"SpyDialer: Got HTML length {len(html)}")
+                            
+                            # Check for cloudflare/blocking
+                            if 'cloudflare' in html.lower() or 'cf-browser-verification' in html.lower():
+                                logger.warning("SpyDialer: Cloudflare detected")
+                                continue  # Try next proxy
+                            
+                            if 'blocked' in html.lower() or 'captcha' in html.lower():
+                                logger.warning("SpyDialer: Blocking detected")
+                                continue  # Try next proxy
+                            
+                            return self._parse_result(html, phone)
+                            
+                except Exception as e:
+                    logger.warning(f"SpyDialer: {'Proxy ' + proxy_url if proxy_url else 'Direct'} failed: {e}")
+                    continue
+            
+            logger.error("SpyDialer: All proxies failed")
+            return None
                     
         except Exception as e:
             logger.error(f"SpyDialer lookup error: {e}", exc_info=True)

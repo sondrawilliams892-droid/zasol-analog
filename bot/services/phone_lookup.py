@@ -8,6 +8,15 @@ from bot.services.spy_dialer import SpyDialerService
 
 logger = logging.getLogger(__name__)
 
+# Free proxy rotation for scraping (GeoNode API)
+SCRAPING_PROXIES = [
+    "http://38.183.146.83:80",      # elite, Indonesia
+    "http://54.39.154.107:8082",    # anonymous, Canada  
+    "http://188.132.150.253:8080",  # transparent, Turkey
+    "http://31.145.149.75:9090",    # transparent, Turkey
+    "http://103.48.68.29:83",       # transparent, India
+]
+
 
 class PhoneLookupService:
     """Multi-source phone lookup: paid API -> free API -> scraping fallback"""
@@ -186,27 +195,41 @@ class PhoneLookupService:
                 "Cache-Control": "max-age=0",
             }
             
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15), allow_redirects=True) as resp:
-                    logger.info(f"TruePeopleSearch: Response status {resp.status}")
-                    logger.info(f"TruePeopleSearch: Content-Type: {resp.headers.get('Content-Type', 'unknown')}")
-                    
-                    if resp.status != 200:
-                        logger.warning(f"TruePeopleSearch returned {resp.status}")
-                        return None
-                    
-                    html = await resp.text()
-                    logger.info(f"TruePeopleSearch: Got HTML length {len(html)}")
-                    
-                    # Check for cloudflare/blocking
-                    if 'cloudflare' in html.lower() or 'cf-browser-verification' in html.lower():
-                        logger.warning("TruePeopleSearch: Cloudflare detected")
-                        return None
-                    if 'blocked' in html.lower() or 'captcha' in html.lower():
-                        logger.warning("TruePeopleSearch: Blocking detected")
-                        return None
-                    
-                    soup = BeautifulSoup(html, "lxml")
+            # Try with proxy first, then without
+            proxies_to_try = SCRAPING_PROXIES + [None]  # None = direct
+            
+            for proxy_url in proxies_to_try:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        proxy = proxy_url if proxy_url else None
+                        logger.info(f"TruePeopleSearch: Requesting via {'proxy ' + proxy if proxy else 'direct'}")
+                        
+                        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15), allow_redirects=True, proxy=proxy) as resp:
+                            logger.info(f"TruePeopleSearch: Response status {resp.status} via {'proxy' if proxy else 'direct'}")
+                            
+                            if resp.status != 200:
+                                logger.warning(f"TruePeopleSearch returned {resp.status}")
+                                continue
+                            
+                            html = await resp.text()
+                            logger.info(f"TruePeopleSearch: Got HTML length {len(html)}")
+                            
+                            # Check for cloudflare/blocking
+                            if 'cloudflare' in html.lower() or 'cf-browser-verification' in html.lower():
+                                logger.warning("TruePeopleSearch: Cloudflare detected")
+                                continue
+                            if 'blocked' in html.lower() or 'captcha' in html.lower():
+                                logger.warning("TruePeopleSearch: Blocking detected")
+                                continue
+                            
+                            soup = BeautifulSoup(html, "lxml")
+                            break
+                except Exception as e:
+                    logger.warning(f"TruePeopleSearch: {'Proxy ' + proxy_url if proxy_url else 'Direct'} failed: {e}")
+                    continue
+            else:
+                logger.error("TruePeopleSearch: All proxies/direct failed")
+                return None
                     
                     result = {
                         "source": "truepeoplesearch",
