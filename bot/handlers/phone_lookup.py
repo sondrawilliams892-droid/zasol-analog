@@ -136,4 +136,3 @@ async def process_batch(message: Message, state: FSMContext):
 @router.callback_query(F.data == "menu:batch")
 async def menu_batch(callback: CallbackQuery, state: FSMContext):
     await phone_batch(callback, state)
-ch(callback, state)
