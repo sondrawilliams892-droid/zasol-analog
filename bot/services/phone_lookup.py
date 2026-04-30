@@ -4,35 +4,64 @@ from typing import Optional, Dict, List
 from bs4 import BeautifulSoup
 
 from bot.config import WHITEPAGES_API_KEY, NUMVERIFY_API_KEY, USE_SCRAPING
+from bot.services.spy_dialer import SpyDialerService
 
 logger = logging.getLogger(__name__)
+
 
 class PhoneLookupService:
     """Multi-source phone lookup: paid API -> free API -> scraping fallback"""
     
+    def __init__(self):
+        self.spy_dialer = SpyDialerService()
+    
     async def lookup(self, phone: str) -> Optional[Dict]:
         phone = self._normalize(phone)
+        
+        results = []
         
         # 1. Try Whitepages Pro (paid, best quality)
         if WHITEPAGES_API_KEY:
             result = await self._whitepages_lookup(phone)
             if result and result.get("name"):
                 logger.info(f"Whitepages hit for {phone}")
-                return result
+                results.append(result)
         
         # 2. Try Numverify (free, basic)
         if NUMVERIFY_API_KEY:
             result = await self._numverify_lookup(phone)
             if result:
                 logger.info(f"Numverify hit for {phone}")
-                return result
+                results.append(result)
         
-        # 3. Scraping fallback (TruePeopleSearch)
+        # 3. Scraping fallback (TruePeopleSearch + SpyDialer)
         if USE_SCRAPING:
+            # Try TruePeopleSearch
             result = await self._truepeoplesearch_scrape(phone)
             if result and result.get("name"):
-                logger.info(f"Scraping hit for {phone}")
-                return result
+                logger.info(f"TruePeopleSearch hit for {phone}")
+                results.append(result)
+            
+            # Try SpyDialer
+            result = await self.spy_dialer.lookup(phone)
+            if result and result.get("name"):
+                logger.info(f"SpyDialer hit for {phone}")
+                results.append(result)
+        
+        # Return best result (prioritize by data completeness)
+        if results:
+            # Sort by number of fields present
+            def score_result(r):
+                score = 0
+                if r.get("name"): score += 10
+                if r.get("address"): score += 5
+                if r.get("age") or r.get("dob"): score += 3
+                if r.get("emails"): score += 2
+                if r.get("relatives"): score += 1
+                return score
+            
+            results.sort(key=score_result, reverse=True)
+            return results[0]
         
         return None
     
@@ -191,7 +220,15 @@ class PhoneLookupService:
         if not result:
             return "❌ Ничего не найдено."
         
-        lines = [f"<b>🔍 Результат поиска ({result.get('source', 'unknown')})</b>"]
+        source = result.get('source', 'unknown')
+        source_display = {
+            'whitepages': 'Whitepages Pro',
+            'numverify': 'NumVerify',
+            'truepeoplesearch': 'TruePeopleSearch',
+            'SpyDialer': 'SpyDialer'
+        }.get(source, source)
+        
+        lines = [f"<b>🔍 Результат поиска ({source_display})</b>"]
         lines.append(f"\n📞 Номер: <code>{result.get('phone', '')}</code>")
         
         if result.get("name"):
@@ -201,7 +238,8 @@ class PhoneLookupService:
         if result.get("dob"):
             lines.append(f"📅 DOB: {result['dob']}")
         
-        lines.append(f"\n🏠 Адрес:\n{result.get('address', '—')}")
+        if result.get("address"):
+            lines.append(f"\n🏠 Адрес:\n{result['address']}")
         
         if result.get("addresses") and len(result["addresses"]) > 1:
             lines.append("\n📍 Все адреса:")
@@ -214,9 +252,14 @@ class PhoneLookupService:
                 lines.append(f"  • {email}")
         
         if result.get("phones") and len(result["phones"]) > 1:
-            lines.append(f"\n📞 Все номера:")
+            lines.append(f"\n📞 Связанные номера:")
             for p in result["phones"][:10]:
                 lines.append(f"  • {p}")
+        
+        if result.get("relatives"):
+            lines.append(f"\n👥 Родственники:")
+            for rel in result["relatives"][:5]:
+                lines.append(f"  • {rel}")
         
         if result.get("carrier"):
             lines.append(f"\n📡 Оператор: {result['carrier']}")
