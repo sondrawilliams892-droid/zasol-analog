@@ -107,7 +107,7 @@ async def credit_report(callback: CallbackQuery):
         "• <a href='https://www.annualcreditreport.com'>AnnualCreditReport.com</a> — законное право 1/год\n"
         "• <a href='https://www.experian.com'>Experian</a> — бесплатный Experian отчёт\n"
         "• <a href='https://www.creditkarma.com'>Credit Karma</a> — еженедельные обновления\n\n"
-        "⚠️ <i>Никогда не платите за "credit report" — официальные сервисы бесплатны.</i>",
+        "⚠️ <i>Никогда не платите за 'credit report' — официальные сервисы бесплатны.</i>",
         reply_markup=back_button("menu:main"),
         disable_web_page_preview=True
     )
