@@ -23,6 +23,6 @@ USE_SCRAPING = os.getenv("USE_SCRAPING", "true").lower() in ("true", "1", "yes")
 
 # ScraperAPI — обходит Cloudflare (5000 free credits, 7-day trial)
 # Регистрация: https://www.scraperapi.com/signup
-SCRAPERAPI_KEY = os.getenv("SCRAPERAPI_KEY", "8ddcaf1d2ac711a88569c17db597b4ed")
+SCRAPERAPI_KEY = os.getenv("SCRAPERAPI_KEY", "") or "8ddcaf1d2ac711a88569c17db597b4ed"
 
 REDIS_URL = os.getenv("REDIS_URL", "")
