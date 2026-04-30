@@ -42,13 +42,13 @@ async def process_phone(message: Message, state: FSMContext):
     await state.clear()
     processing_msg = await message.answer("🔍 Ищу информацию...")
     
-    db = next(SessionLocal())
-    increment_search_count(db, message.from_user.id)
-    
-    result = await phone_service.lookup(phone)
-    
-    if result:
-        save_phone_search(db, message.from_user.id, phone, result)
+    with SessionLocal() as db:
+        increment_search_count(db, message.from_user.id)
+        
+        result = await phone_service.lookup(phone)
+        
+        if result:
+            save_phone_search(db, message.from_user.id, phone, result)
     
     text = phone_service.format_result(result)
     
@@ -57,8 +57,8 @@ async def process_phone(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "phone:history")
 async def phone_history(callback: CallbackQuery):
-    db = next(SessionLocal())
-    history = get_user_search_history(db, callback.from_user.id, limit=10)
+    with SessionLocal() as db:
+        history = get_user_search_history(db, callback.from_user.id, limit=10)
     
     if not history:
         await callback.message.edit_text(
@@ -103,23 +103,23 @@ async def process_batch(message: Message, state: FSMContext):
         return
     
     await state.clear()
-    db = next(SessionLocal())
     
     results = []
     total = len(phones)
     
     progress_msg = await message.answer(f"⏳ Обработка: 0/{total}")
     
-    for i, phone in enumerate(phones, 1):
-        await progress_msg.edit_text(f"⏳ Обработка: {i}/{total}\n📞 {phone}")
-        
-        increment_search_count(db, message.from_user.id)
-        result = await phone_service.lookup(phone)
-        
-        if result:
-            save_phone_search(db, message.from_user.id, phone, result)
-        
-        results.append((phone, result))
+    with SessionLocal() as db:
+        for i, phone in enumerate(phones, 1):
+            await progress_msg.edit_text(f"⏳ Обработка: {i}/{total}\n📞 {phone}")
+            
+            increment_search_count(db, message.from_user.id)
+            result = await phone_service.lookup(phone)
+            
+            if result:
+                save_phone_search(db, message.from_user.id, phone, result)
+            
+            results.append((phone, result))
     
     await progress_msg.delete()
     
@@ -136,3 +136,4 @@ async def process_batch(message: Message, state: FSMContext):
 @router.callback_query(F.data == "menu:batch")
 async def menu_batch(callback: CallbackQuery, state: FSMContext):
     await phone_batch(callback, state)
+ch(callback, state)

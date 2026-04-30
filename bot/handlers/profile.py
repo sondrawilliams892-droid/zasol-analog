@@ -10,8 +10,8 @@ router = Router()
 
 @router.callback_query(F.data == "menu:profile")
 async def profile_handler(callback: CallbackQuery):
-    db = next(SessionLocal())
-    user = get_or_create_user(db, callback.from_user.id)
+    with SessionLocal() as db:
+        user = get_or_create_user(db, callback.from_user.id)
     
     # Get credit history count
     credit_entries = len(credit_service.get_credit_history(callback.from_user.id))

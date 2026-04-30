@@ -75,8 +75,8 @@ async def process_credit_score(message: Message, state: FSMContext):
     bureau = parts[1]
     note = parts[2] if len(parts) > 2 else ""
     
-    db = next(SessionLocal())
-    save_credit_score(db, message.from_user.id, score, bureau, note)
+    with SessionLocal() as db:
+        save_credit_score(db, message.from_user.id, score, bureau, note)
     
     rating = credit_service.interpret_score(score)
     

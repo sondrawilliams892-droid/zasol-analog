@@ -13,14 +13,14 @@ router = Router()
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     
-    db = next(SessionLocal())
-    user = get_or_create_user(
-        db, 
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-        last_name=message.from_user.last_name
-    )
+    with SessionLocal() as db:
+        user = get_or_create_user(
+            db, 
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            last_name=message.from_user.last_name
+        )
     
     text = (
         f"👋 Привет, {message.from_user.first_name or 'друг'}!\n\n"

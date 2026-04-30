@@ -13,10 +13,10 @@ async def cmd_admin(message):
         await message.answer("❌ У вас нет доступа.")
         return
     
-    db = next(SessionLocal())
-    total_users = db.query(User).count()
-    total_searches = db.query(PhoneSearch).count()
-    premium_users = db.query(User).filter(User.is_premium == 1).count()
+    with SessionLocal() as db:
+        total_users = db.query(User).count()
+        total_searches = db.query(PhoneSearch).count()
+        premium_users = db.query(User).filter(User.is_premium == 1).count()
     
     text = (
         f"🔐 <b>Админ-панель</b>\n\n"
@@ -33,9 +33,9 @@ async def admin_stats(callback: CallbackQuery):
         await callback.answer("❌ Нет доступа", show_alert=True)
         return
     
-    db = next(SessionLocal())
-    total_users = db.query(User).count()
-    total_searches = db.query(PhoneSearch).count()
+    with SessionLocal() as db:
+        total_users = db.query(User).count()
+        total_searches = db.query(PhoneSearch).count()
     
     await callback.message.edit_text(
         f"📊 Статистика:\n\n"
