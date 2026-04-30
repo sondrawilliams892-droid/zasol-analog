@@ -14,13 +14,18 @@ logger = logging.getLogger(__name__)
 class SpyDialerService:
     BASE_URL = "https://spydialer.com/search"
     
-    # Free proxy rotation (GeoNode API)
+    # WebShare.io rotating proxies (20 US/EU residential)
     PROXY_LIST = [
-        "http://38.183.146.83:80",   # elite, Indonesia
-        "http://54.39.154.107:8082", # anonymous, Canada  
-        "http://188.132.150.253:8080", # transparent, Turkey
-        "http://31.145.149.75:9090", # transparent, Turkey
-        "http://103.48.68.29:83",    # transparent, India
+        "http://osivcxfh:ja2igvgkpf34@96.62.187.28:7241",
+        "http://osivcxfh:ja2igvgkpf34@9.142.11.135:5291",
+        "http://osivcxfh:ja2igvgkpf34@9.142.35.233:6404",
+        "http://osivcxfh:ja2igvgkpf34@63.246.153.66:5735",
+        "http://osivcxfh:ja2igvgkpf34@216.98.249.50:7031",
+        "http://osivcxfh:ja2igvgkpf34@138.226.71.232:7422",
+        "http://osivcxfh:ja2igvgkpf34@45.56.161.116:8992",
+        "http://osivcxfh:ja2igvgkpf34@46.203.60.145:7145",
+        "http://osivcxfh:ja2igvgkpf34@9.142.36.150:5821",
+        "http://osivcxfh:ja2igvgkpf34@72.1.181.116:5510",
     ]
     
     # Rotate user agents to avoid blocking
