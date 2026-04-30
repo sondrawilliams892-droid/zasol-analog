@@ -6,32 +6,73 @@ import aiohttp
 from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SpyDialerService:
     BASE_URL = "https://spydialer.com/search"
+    
+    # Rotate user agents to avoid blocking
+    USER_AGENTS = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+    ]
     
     async def lookup(self, phone: str) -> Optional[Dict]:
         """Lookup phone number on SpyDialer."""
         try:
             # Clean phone number
             clean_phone = re.sub(r'[^\d]', '', phone)
+            logger.info(f"SpyDialer: Looking up {clean_phone}")
+            
+            import random
+            headers = {
+                'User-Agent': random.choice(self.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Cache-Control': 'max-age=0',
+            }
             
             async with aiohttp.ClientSession() as session:
                 url = f"{self.BASE_URL}?number={clean_phone}"
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                logger.info(f"SpyDialer: Requesting {url}")
                 
-                async with session.get(url, headers=headers, timeout=30) as response:
+                async with session.get(url, headers=headers, timeout=30, allow_redirects=True) as response:
+                    logger.info(f"SpyDialer: Response status {response.status}")
+                    logger.info(f"SpyDialer: Content-Type: {response.headers.get('Content-Type', 'unknown')}")
+                    
                     if response.status != 200:
+                        logger.warning(f"SpyDialer: Non-200 status: {response.status}")
                         return None
                     
                     html = await response.text()
+                    logger.info(f"SpyDialer: Got HTML length {len(html)}")
+                    
+                    # Check for cloudflare/blocking
+                    if 'cloudflare' in html.lower() or 'cf-browser-verification' in html.lower():
+                        logger.warning("SpyDialer: Cloudflare detected")
+                        return None
+                    
+                    if 'blocked' in html.lower() or 'captcha' in html.lower():
+                        logger.warning("SpyDialer: Blocking detected")
+                        return None
+                    
                     return self._parse_result(html, phone)
                     
         except Exception as e:
-            print(f"SpyDialer lookup error: {e}")
+            logger.error(f"SpyDialer lookup error: {e}", exc_info=True)
             return None
     
     def _parse_result(self, html: str, phone: str) -> Optional[Dict]:

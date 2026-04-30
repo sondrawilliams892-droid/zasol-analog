@@ -19,5 +19,5 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///zasol.db")
 
 WHITEPAGES_API_KEY = os.getenv("WHITEPAGES_API_KEY", "")
 NUMVERIFY_API_KEY = os.getenv("NUMVERIFY_API_KEY", "")
-USE_SCRAPING = os.getenv("USE_SCRAPING", "true").lower() == "true"
+USE_SCRAPING = os.getenv("USE_SCRAPING", "true").lower() in ("true", "1", "yes")
 REDIS_URL = os.getenv("REDIS_URL", "")
