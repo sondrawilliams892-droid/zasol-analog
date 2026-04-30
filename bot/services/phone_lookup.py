@@ -387,3 +387,7 @@ class PhoneLookupService:
 
         lines.append("\n<i>⚠️ Данные из публичных источников.</i>")
         return "\n".join(lines)
+
+
+# Singleton instance for import compatibility
+phone_service = PhoneLookupService()
