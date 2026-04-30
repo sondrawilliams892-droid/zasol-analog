@@ -5,7 +5,12 @@ from typing import Optional, Dict
 
 from bs4 import BeautifulSoup
 
-from bot.config import WHITEPAGES_API_KEY, NUMVERIFY_API_KEY, USE_SCRAPING
+from bot.config import (
+    WHITEPAGES_API_KEY,
+    NUMVERIFY_API_KEY,
+    USE_SCRAPING,
+    SCRAPERAPI_KEY,
+)
 from bot.services.spy_dialer import SpyDialerService
 
 logger = logging.getLogger(__name__)
@@ -61,7 +66,17 @@ class PhoneLookupService:
         else:
             logger.info("Numverify API key not configured, skipping")
 
-        # 3. Scraping fallback (TruePeopleSearch + SpyDialer)
+        # 3. ScraperAPI — обходит Cloudflare (5000 free credits trial)
+        if SCRAPERAPI_KEY:
+            logger.info(f"Trying ScraperAPI for {phone}")
+            result = await self._scraperapi_lookup(phone)
+            if result and result.get("name"):
+                logger.info(f"ScraperAPI hit for {phone}: {result['name']}")
+                results.append(result)
+            else:
+                logger.info(f"ScraperAPI miss for {phone}")
+
+        # 4. Scraping fallback (TruePeopleSearch + SpyDialer)
         if USE_SCRAPING:
             logger.info(f"Trying scraping sources for {phone}")
 
@@ -196,6 +211,31 @@ class PhoneLookupService:
                     }
         except Exception as e:
             logger.error(f"Numverify error: {e}")
+            return None
+
+    async def _scraperapi_lookup(self, phone: str) -> Optional[Dict]:
+        """ScraperAPI — обходит Cloudflare и блокировки"""
+        try:
+            target_url = f"https://www.truepeoplesearch.com/results?phoneno={phone[1:4]}%20{phone[4:7]}-{phone[7:]}"
+            api_url = "http://api.scraperapi.com"
+            params = {
+                "api_key": SCRAPERAPI_KEY,
+                "url": target_url,
+                "render": "true",
+                "premium": "true",
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    api_url, params=params, timeout=aiohttp.ClientTimeout(total=45)
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"ScraperAPI returned {resp.status}")
+                        return None
+                    html = await resp.text()
+                    logger.info(f"ScraperAPI: Got HTML length {len(html)}")
+                    return self._parse_tps_html(html, phone)
+        except Exception as e:
+            logger.error(f"ScraperAPI error: {e}")
             return None
 
     async def _truepeoplesearch_scrape(self, phone: str) -> Optional[Dict]:
@@ -338,6 +378,70 @@ class PhoneLookupService:
             logger.error(f"Scraping error: {e}")
             return None
 
+    def _parse_tps_html(self, html: str, phone: str) -> Optional[Dict]:
+        """Parse TruePeopleSearch HTML"""
+        try:
+            soup = BeautifulSoup(html, "lxml")
+            result = {
+                "source": "scraperapi",
+                "phone": phone,
+                "name": "",
+                "address": "",
+                "emails": [],
+                "phones": [phone],
+                "addresses": [],
+                "dob": "",
+                "age": "",
+                "raw": {},
+            }
+
+            cards = soup.find_all("div", class_="card")
+            if not cards:
+                cards = soup.find_all("div", class_="card-summary")
+
+            for card in cards[:1]:
+                name_tag = (
+                    card.find("a", class_="name")
+                    or card.find("h2")
+                    or card.find("span", class_="name")
+                )
+                if name_tag:
+                    result["name"] = name_tag.get_text(strip=True)
+
+                addr_tags = card.find_all("div", class_="address") or card.find_all(
+                    "span", class_="address"
+                )
+                for addr in addr_tags:
+                    addr_text = addr.get_text(strip=True)
+                    if addr_text:
+                        result["addresses"].append(addr_text)
+
+                if result["addresses"]:
+                    result["address"] = result["addresses"][0]
+
+                email_tags = card.find_all(
+                    "a", href=lambda x: x and "mailto:" in x
+                )
+                for email in email_tags:
+                    email_text = email.get_text(strip=True)
+                    if email_text and email_text not in result["emails"]:
+                        result["emails"].append(email_text)
+
+                phone_tags = card.find_all(
+                    "a", href=lambda x: x and "tel:" in x
+                )
+                for p in phone_tags:
+                    p_text = p.get_text(strip=True)
+                    if p_text and p_text not in result["phones"]:
+                        result["phones"].append(p_text)
+
+            if result["name"]:
+                return result
+            return None
+        except Exception as e:
+            logger.error(f"Parse error: {e}")
+            return None
+
     def format_result(self, result: Dict) -> str:
         if not result:
             return "❌ Ничего не найдено."
@@ -347,6 +451,7 @@ class PhoneLookupService:
             "whitepages": "Whitepages Pro",
             "numverify": "NumVerify",
             "truepeoplesearch": "TruePeopleSearch",
+            "scraperapi": "ScraperAPI",
             "SpyDialer": "SpyDialer",
         }.get(source, source)
 
